@@ -7,6 +7,9 @@
 #include <chrono>
 #include <assert.h>
 
+typedef std::chrono::high_resolution_clock Clock;
+decltype(Clock::now()) tResume;
+
 template <typename... Args>
 struct std::coroutine_traits<void, Args...> {
     struct promise_type {
@@ -33,7 +36,7 @@ auto setTimeout(uv_loop_t* loop, uint32_t msTime)
 
         bool await_ready()
         {
-            printf("await_ready called\n");
+            printf("await_ready called, returning false\n");
             return false;
         }
         auto await_resume()
@@ -42,7 +45,7 @@ auto setTimeout(uv_loop_t* loop, uint32_t msTime)
         }
         void await_suspend(std::coroutine_handle<> coro)
         {
-            printf("await_suspend called\n");
+            printf("await_suspend called, waiting for %u ms...\n", mMsTime);
             mCoro = coro;
             auto timer = new uv_timer_t;
             int r = uv_timer_init(mLoop, timer);
@@ -58,10 +61,12 @@ auto setTimeout(uv_loop_t* loop, uint32_t msTime)
                 {
                     delete reinterpret_cast<uv_timer_t*>(handle);
                 });
-                printf("calling coroutine.resume()\n");
+                printf("timer expired, calling coroutine.resume()\n");
+                tResume = Clock::now();
                 self->mCoro.resume();
             }, mMsTime, 0);
         }
+        ~Awaiter() { printf("Awaiter destroyed\n"); }
     };
     return Awaiter{loop, msTime};
 }
@@ -77,8 +82,10 @@ void startupFunc(uv_async_t* handle)
     for (int i = 0; ; i++)
     {
         auto tsStart = msNow();
+        printf("Calling co_await...\n");
         co_await setTimeout(uv_default_loop(), i*10);
-        printf("elapsed[%d]: %d\n", i, (int)(msNow() - tsStart));
+        printf("elapsed: %d, overhead: %ld us\n\n", (int)(msNow() - tsStart),
+            std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - tResume).count());
     }
 }
 
