@@ -1,2 +1,2 @@
-This is a playgorund project for experimenting with C++ coroutines. Currently it
-runs on g++ version 10
+This is a playground project for experimenting with C++ coroutines.
+Currently it requires g++ version 10
