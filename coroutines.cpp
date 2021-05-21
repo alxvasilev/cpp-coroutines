@@ -18,7 +18,11 @@ struct std::coroutine_traits<void, Args...> {
     };
 };
 
-
+/* The return value of the coroutine is the Awaitable.
+ * The compiler tries to obtain the awaiter from Awaibable::operator co_await
+ * and global co_await(Awaitable&) operator.
+ * If it fails, the awaiter is the same object as the returned awaitable (as is in this case)
+ */
 auto setTimeout(uv_loop_t* loop, uint32_t msTime)
 {
     struct Awaiter
