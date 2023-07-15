@@ -6,16 +6,18 @@
 #include <utility>
 #include <chrono>
 #include <assert.h>
+#include <x86intrin.h>
 
 typedef std::chrono::high_resolution_clock Clock;
 decltype(Clock::now()) tResume;
+decltype(__rdtsc()) cyclesResume;
 
 template <typename... Args>
 struct std::coroutine_traits<void, Args...> {
     struct promise_type {
         void get_return_object() {}
         std::suspend_never initial_suspend() { return {}; }
-        std::suspend_never final_suspend() { return {}; }
+        std::suspend_never final_suspend() noexcept { return {}; }
         void return_void() {}
         void unhandled_exception() { std::terminate(); }
     };
@@ -41,7 +43,7 @@ auto setTimeout(uv_loop_t* loop, uint32_t msTime)
         }
         auto await_resume()
         {
-            printf("await_resume called\n");
+            //printf("await_resume called\n");
         }
         void await_suspend(std::coroutine_handle<> coro)
         {
@@ -62,12 +64,13 @@ auto setTimeout(uv_loop_t* loop, uint32_t msTime)
                     delete reinterpret_cast<uv_timer_t*>(handle);
                 });
                 printf("timer expired, calling coroutine.resume()\n");
+                cyclesResume = __rdtsc();
                 tResume = Clock::now();
                 //printf("immediately elapsed: %ld ns\n", std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - tResume).count());
                 self->mCoro.resume();
             }, mMsTime, 0);
         }
-        ~Awaiter() { printf("Awaiter destroyed\n"); }
+        ~Awaiter() { /*printf("Awaiter destroyed\n");*/ }
     };
     return Awaiter{loop, msTime};
 }
@@ -82,11 +85,13 @@ void startupFunc(uv_async_t* handle)
 {
     for (int i = 0; ; i++)
     {
-        auto tsStart = msNow();
         printf("Calling co_await...\n");
+        auto tsStart = msNow();
         co_await setTimeout(uv_default_loop(), i*10);
-        printf("elapsed: %d, overhead: %ld us\n\n", (int)(msNow() - tsStart),
-            std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - tResume).count());
+        auto overhead = std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - tResume).count();
+        auto cycles = __rdtsc() - cyclesResume;
+        printf("elapsed: %d ms, overhead: %ld ns (~%llu cycles, %.2f cycles/ns)\n\n",
+            (int)(msNow() - tsStart), overhead, cycles, (float)cycles/overhead);
     }
 }
 
