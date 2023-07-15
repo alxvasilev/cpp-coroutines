@@ -43,7 +43,7 @@ auto setTimeout(uv_loop_t* loop, uint32_t msTime)
         }
         auto await_resume()
         {
-            //printf("await_resume called\n");
+            printf("await_resume called\n");
         }
         void await_suspend(std::coroutine_handle<> coro)
         {
